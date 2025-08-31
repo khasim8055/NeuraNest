@@ -1,0 +1,5 @@
+streamlit==1.37.0
+openai>=1.30.0
+pandas
+reportlab
+matplotlib
