@@ -1,40 +1,67 @@
-# NeuraNest.py - Fully Updated Closed Beta Version with German Translation
+# NeuraNest_Local_Advanced.py
 import streamlit as st
 import json
-from datetime import datetime
 import os
 from io import BytesIO
+from datetime import datetime
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 import pandas as pd
 import matplotlib.pyplot as plt
-from openai import OpenAI
-import requests
+from cryptography.fernet import Fernet
+import re
+from collections import Counter
+import numpy as np
 
 # ---------------------------
-# Storage
+# CONFIG
 # ---------------------------
+st.set_page_config(page_title="NeuraNest Insights", layout="wide")
+
+KEY_FILE = "secret.key"
 PATIENTS_FILE = "patients.json"
-AUDIT_FILE = "audit_log.json"
 
+# ---------------------------
+# Encryption Setup
+# ---------------------------
+def load_key():
+    if os.path.exists(KEY_FILE):
+        with open(KEY_FILE, "rb") as f:
+            return f.read()
+    key = Fernet.generate_key()
+    with open(KEY_FILE, "wb") as f:
+        f.write(key)
+    return key
+
+fernet = Fernet(load_key())
+
+def encrypt_data(data: str) -> bytes:
+    return fernet.encrypt(data.encode())
+
+def decrypt_data(data: bytes) -> str:
+    return fernet.decrypt(data).decode()
+
+# ---------------------------
+# Storage helpers
+# ---------------------------
 def load_patients():
     if os.path.exists(PATIENTS_FILE):
-        with open(PATIENTS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+        with open(PATIENTS_FILE, "rb") as f:
+            encrypted = f.read()
+            if encrypted:
+                try:
+                    return json.loads(decrypt_data(encrypted))
+                except Exception as e:
+                    st.error("Failed to decrypt patient file. Is the secret.key matching the file?")
+                    return []
     return []
 
 def save_patients(patients):
-    with open(PATIENTS_FILE, "w", encoding="utf-8") as f:
-        json.dump(patients, f, ensure_ascii=False, indent=2)
-
-def load_audit_logs():
-    if os.path.exists(AUDIT_FILE):
-        with open(AUDIT_FILE, "r", encoding="utf-8") as f:
-            return [json.loads(line) for line in f.readlines()]
-    return []
+    with open(PATIENTS_FILE, "wb") as f:
+        f.write(encrypt_data(json.dumps(patients, ensure_ascii=False, indent=2)))
 
 # ---------------------------
-# PDF Generator
+# Basic Utilities
 # ---------------------------
 def create_pdf(text, patient_name):
     buffer = BytesIO()
@@ -51,281 +78,391 @@ def create_pdf(text, patient_name):
     return buffer
 
 # ---------------------------
-# Dummy Generator
-# ---------------------------
-def dummy_discharge_summary(patient, autonomy_level, lang="Deutsch"):
-    if autonomy_level == 0:
-        return f"• {patient['diagnosis']} erfolgreich behandelt\n• Beobachtung bis {patient['discharge_date']}" \
-            if lang == "Deutsch" else f"• {patient['diagnosis']} successfully treated\n• Observation until {patient['discharge_date']}"
-    elif autonomy_level == 1:
-        return f"{patient['name']} wurde erfolgreich behandelt." if lang == "Deutsch" else f"{patient['name']} was successfully treated."
-    else:
-        return f"{patient['name']} hatte eine längere Behandlung mit {patient['diagnosis']}." if lang == "Deutsch" else f"{patient['name']} had extended treatment for {patient['diagnosis']}."
-
-# ---------------------------
-# AI Generators
-# ---------------------------
-def generate_openai_summary(patient, autonomy_level, lang, api_key, model_choice):
-    client = OpenAI(api_key=api_key)
-    prompt = f"""
-    Patient: {patient['name']}, {patient['age']} Jahre
-    Diagnose: {patient['diagnosis']}
-    Aufenthalt: {patient['admission_date']} bis {patient['discharge_date']}
-    Notizen: {patient['notes']}
-    """
-    if autonomy_level == 0:
-        prompt += "\nErstelle kurze Stichpunkte." if lang == "Deutsch" else "\nCreate short bullet points."
-    elif autonomy_level == 1:
-        prompt += "\nErstelle einfache Zusammenfassung." if lang == "Deutsch" else "\nCreate a simple summary."
-    else:
-        prompt += "\nErstelle detaillierte Zusammenfassung mit Empfehlungen." if lang == "Deutsch" else "\nCreate a detailed summary with recommendations."
-    response = client.chat.completions.create(
-        model=model_choice,
-        messages=[
-            {"role": "system", "content": "Du bist ein deutscher medizinischer Assistent." if lang == "Deutsch" else "You are a medical assistant."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.3
-    )
-    return response.choices[0].message.content
-
-def generate_togetherai_summary(patient, autonomy_level, lang, api_key, model_choice):
-    url = "https://api.together.xyz/v1/chat/completions"
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    prompt = f"""
-    Patient: {patient['name']}, {patient['age']} Jahre
-    Diagnose: {patient['diagnosis']}
-    Aufenthalt: {patient['admission_date']} bis {patient['discharge_date']}
-    Notizen: {patient['notes']}
-    """
-    if autonomy_level == 0:
-        prompt += "\nErstelle kurze Stichpunkte." if lang == "Deutsch" else "\nCreate short bullet points."
-    elif autonomy_level == 1:
-        prompt += "\nErstelle einfache Zusammenfassung." if lang == "Deutsch" else "\nCreate a simple summary."
-    else:
-        prompt += "\nErstelle detaillierte Zusammenfassung mit Empfehlungen." if lang == "Deutsch" else "\nCreate a detailed summary with recommendations."
-    data = {
-        "model": model_choice,
-        "messages": [
-            {"role": "system", "content": "Du bist ein deutscher medizinischer Assistent." if lang == "Deutsch" else "You are a medical assistant."},
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": 0.3
-    }
-    resp = requests.post(url, headers=headers, json=data)
-    resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"]
-
-# ---------------------------
-# Hybrid Generator
-# ---------------------------
-def generate_summary(patient, autonomy_level, lang, mode, api_key, model_choice):
-    if mode == "Dummy Mode":
-        return dummy_discharge_summary(patient, autonomy_level, lang)
-    elif mode == "OpenAI":
-        return generate_openai_summary(patient, autonomy_level, lang, api_key, model_choice)
-    elif mode == "TogetherAI":
-        return generate_togetherai_summary(patient, autonomy_level, lang, api_key, model_choice)
-    else:
-        return "⚠️ Unknown mode selected."
-
-# ---------------------------
-# Delete / Undo Functions
+# Core CRUD: delete & undo
 # ---------------------------
 def delete_patient(patient_id):
     patients = load_patients()
-    for i, patient in enumerate(patients):
-        if patient["id"] == patient_id:
-            st.session_state["last_deleted_patient"] = patient
-            del patients[i]
-            save_patients(patients)
-            return patients
+    deleted = [p for p in patients if p["id"] == patient_id]
+    patients = [p for p in patients if p["id"] != patient_id]
+    save_patients(patients)
+    if deleted:
+        st.session_state["last_deleted"] = deleted[0]
     return patients
 
 def undo_delete():
-    if "last_deleted_patient" in st.session_state:
+    if "last_deleted" in st.session_state:
         patients = load_patients()
-        patients.append(st.session_state["last_deleted_patient"])
+        patients.append(st.session_state["last_deleted"])
         save_patients(patients)
-        del st.session_state["last_deleted_patient"]
+        st.success(f" Patient {st.session_state['last_deleted']['name']} restored.")
+        del st.session_state["last_deleted"]
         return patients
-    return load_patients()
-
-# ---------------------------
-# Step 1: Language selection first
-# ---------------------------
-lang = st.radio("🌍 Language / Sprache:", ["Deutsch", "English"], horizontal=True)
-
-# ---------------------------
-# Step 2: Helper function for translation
-# ---------------------------
-def _(en_text, de_text):
-    return de_text if lang == "Deutsch" else en_text
-
-# ---------------------------
-# Streamlit UI
-# ---------------------------
-st.title(_("🏥 NeuraNest MVP – Hybrid AI Assistant", "🏥 NeuraNest MVP – Hybrid KI-Assistent"))
-
-# Mode selection
-mode = st.radio(_("⚙️ Select Mode:", "⚙️ Modus wählen:"), ["Dummy Mode", "OpenAI", "TogetherAI"], horizontal=True)
-api_key = None
-model_choice = None
-if mode in ["OpenAI", "TogetherAI"]:
-    api_key = st.text_input(_("🔑 Enter your API Key:", "🔑 API-Schlüssel eingeben:"), type="password")
-    if mode == "OpenAI":
-        model_choice = st.selectbox(_("🤖 Choose Model:", "🤖 Modell wählen:"), ["gpt-3.5-turbo", "gpt-4o-mini", "gpt-4o"])
     else:
-        model_choice = st.text_input(_("🤖 Together.ai Model:", "🤖 Together.ai Modell:"), value="togethercomputer/llama-2-70b-chat")
-
-# Load patients
-patients = load_patients()
+        st.warning(" No patient to restore.")
+        return load_patients()
 
 # ---------------------------
-# Add New Patient
+# Simple Local Summary Generator (Dummy)
 # ---------------------------
-st.subheader(_("📋 Add New Patient", "📋 Neuen Patienten hinzufügen"))
-with st.form("patient_form"):
-    name = st.text_input(_("Name", "Name"))
-    age = st.number_input(_("Age", "Alter"), min_value=0, max_value=120, step=1)
-    diagnosis = st.text_input(_("Diagnosis", "Diagnose"))
-    admission_date = st.date_input(_("Admission Date", "Aufnahmedatum"))
-    discharge_date = st.date_input(_("Discharge Date", "Entlassungsdatum"))
-    notes = st.text_area(_("Notes", "Notizen"))
-    submitted = st.form_submit_button(_("Save Patient", "Patient speichern"))
-if submitted:
-    new_id = len(patients) + 1
-    patient = {
-        "id": new_id,
-        "name": name,
-        "age": age,
-        "diagnosis": diagnosis,
-        "admission_date": str(admission_date),
-        "discharge_date": str(discharge_date),
-        "notes": notes
-    }
-    patients.append(patient)
-    save_patients(patients)
-    st.success(_(f"✅ Patient {name} saved!", f"✅ Patient {name} gespeichert!"))
+def dummy_discharge_summary(patient, autonomy_level, lang="Deutsch"):
+    if autonomy_level == 0:
+        return (f"• {patient['diagnosis']} erfolgreich behandelt\n• Beobachtung bis {patient['discharge_date']}"
+                if lang == "Deutsch" else
+                f"• {patient['diagnosis']} successfully treated\n• Observation until {patient['discharge_date']}")
+    elif autonomy_level == 1:
+        return (f"{patient['name']} wurde erfolgreich behandelt." if lang == "Deutsch"
+                else f"{patient['name']} was successfully treated.")
+    else:
+        return (f"{patient['name']} hatte eine längere Behandlung mit {patient['diagnosis']}." if lang == "Deutsch"
+                else f"{patient['name']} had extended treatment for {patient['diagnosis']}.")
+
+def generate_summary(patient, autonomy_level, lang, mode="Dummy"):
+    return dummy_discharge_summary(patient, autonomy_level, lang)
 
 # ---------------------------
-# Select Patient and Actions
+# Advanced Analytics Helpers
 # ---------------------------
-if patients:
-    selected_patient = st.selectbox(
-        _("👤 Select Patient:", "👤 Patienten auswählen:"),
-        patients,
-        format_func=lambda x: f"{x['name']} ({x['diagnosis']})",
-        key="select_patient"
-    )
-
-    # ---------------------------
-    # Autonomy Level Guide Panel (Visual)
-    # ---------------------------
-    st.subheader(_("🤖 Autonomy Level Guide", "🤖 Leitfaden zur Autonomie"))
-    al_styles = {
-        0: {"color": "#A0C4FF", "icon": "🟦", "title": _("AL0 – Bullet Points", "AL0 – Stichpunkte")},
-        1: {"color": "#B5E48C", "icon": "🟩", "title": _("AL1 – Simple Summary", "AL1 – Einfache Zusammenfassung")},
-        2: {"color": "#FFADAD", "icon": "🟥", "title": _("AL2 – Detailed Summary", "AL2 – Detaillierte Zusammenfassung")}
-    }
-    al_examples = {
-        0: _("• Diagnosis: Pneumonia\n• Treatment: Antibiotics\n• Observation until discharge",
-             "• Diagnose: Pneumonie\n• Behandlung: Antibiotika\n• Beobachtung bis Entlassung"),
-        1: _("John Doe was treated successfully for pneumonia from 01/08/2025 to 07/08/2025. The treatment was effective and he is ready for discharge.",
-             "John Doe wurde erfolgreich wegen Pneumonie vom 01.08.2025 bis 07.08.2025 behandelt. Die Behandlung war erfolgreich, Entlassung möglich."),
-        2: _("John Doe was admitted for pneumonia from 01/08/2025 to 07/08/2025. The patient responded well to antibiotics. Vital signs remained stable. Recommendations: follow-up X-ray in two weeks, hydration, and monitoring for recurring symptoms.",
-             "John Doe wurde vom 01.08.2025 bis 07.08.2025 wegen Pneumonie aufgenommen. Patient reagierte gut auf Antibiotika. Vitalzeichen stabil. Empfehlungen: Kontrollröntgen in zwei Wochen, Hydration, Überwachung auf Rückfälle.")
-    }
-    for level in range(3):
-        st.markdown(
-            f"""
-            <div style='background-color: {al_styles[level]['color']}; padding: 10px; border-radius: 10px; margin-bottom:10px'>
-            <h4>{al_styles[level]['icon']} {al_styles[level]['title']}</h4>
-            <pre style='font-size:12px'>{al_examples[level]}</pre>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-    # Autonomy selection
-    autonomy = st.radio(
-        _("Autonomy Level:", "Autonomie-Level:"),
-        [0, 1, 2],
-        format_func=lambda x: ["AL0", "AL1", "AL2"][x],
-        horizontal=True,
-        key="autonomy_radio"
-    )
-
-    # ---------------------------
-    # Generate Report
-    # ---------------------------
-    if st.button(_("Generate Report", "Bericht generieren"), key="generate_report"):
-        if mode != "Dummy Mode" and not api_key:
-            st.error(_("⚠️ Please enter API Key first.", "⚠️ Bitte zuerst API-Schlüssel eingeben."))
-        else:
-            summary = generate_summary(selected_patient, autonomy, lang, mode, api_key, model_choice)
-            st.subheader(_("📄 Generated Report", "📄 Generierter Bericht"))
-            st.write(summary)
-            pdf_buffer = create_pdf(summary, selected_patient['name'])
-            st.download_button(
-                _("📥 Download as PDF", "📥 Als PDF herunterladen"),
-                data=pdf_buffer,
-                file_name=f"{selected_patient['name']}_summary.pdf",
-                mime="application/pdf",
-                key="download_pdf"
-            )
-
-    # ---------------------------
-    # Delete / Undo Patient
-    # ---------------------------
-    col1, col2 = st.columns(2)
-    if col1.button(_("🗑️ Delete Patient", "🗑️ Patient löschen"), key="delete_patient"):
-        patients = delete_patient(selected_patient["id"])
-        st.success(_(f"✅ Patient {selected_patient['name']} deleted!", f"✅ Patient {selected_patient['name']} gelöscht!"))
-    if col2.button(_("↩️ Undo Delete", "↩️ Löschen rückgängig"), key="undo_delete"):
-        patients = undo_delete()
-        st.success(_("✅ Undo successful!", "✅ Rückgängig erfolgreich!"))
-
-# ---------------------------
-# Enhanced Analytics & Filtering
-# ---------------------------
-if patients:
-    st.subheader(_("📈 Patient Analytics & Filters", "📈 Patientenanalyse & Filter"))
+def preprocess_df(patients):
     df = pd.DataFrame(patients)
+    if df.empty:
+        return df
+    # Ensure dates are datetimes
     df["admission_date"] = pd.to_datetime(df["admission_date"])
     df["discharge_date"] = pd.to_datetime(df["discharge_date"])
     df["length_of_stay"] = (df["discharge_date"] - df["admission_date"]).dt.days
+    # Basic normalization for diagnosis text
+    df["diagnosis"] = df["diagnosis"].fillna("Unknown").astype(str)
+    df["notes"] = df["notes"].fillna("").astype(str)
+    return df
 
-    col_a, col_b, col_c = st.columns(3)
+# Rule-based readmission risk (simple, transparent)
+def compute_readmission_risk(row):
+    score = 0
+    age = int(row.get("age", 0) or 0)
+    diag = row.get("diagnosis", "").lower()
+    los = int(row.get("length_of_stay", 0) or 0)
+    notes = row.get("notes", "").lower()
+
+    # Age-based
+    if age >= 80:
+        score += 2
+    elif age >= 65:
+        score += 1
+
+    # Diagnosis heuristics (chronic disease keywords)
+    chronic_keywords = ["diabetes", "herzinsuffizienz", "heart failure", "copd", "chronic", "renal", "dialysis", "stroke"]
+    if any(k in diag for k in chronic_keywords) or any(k in notes for k in chronic_keywords):
+        score += 2
+
+    # Long stay
+    if los >= 10:
+        score += 1
+
+    # Notes flags
+    flags = ["complication", "infection", "wound", "reoperation", "unstable"]
+    if any(k in notes for k in flags):
+        score += 1
+
+    # Simple mapping
+    if score <= 1:
+        return "Low", score
+    elif score <= 3:
+        return "Medium", score
+    else:
+        return "High", score
+
+# Simple keyword extractor from notes
+def extract_keywords(notes, top_n=10):
+    if not notes or not isinstance(notes, str):
+        return []
+    # lowercase, remove punctuation except intra-word hyphens
+    clean = re.sub(r"[^\w\s\-]", " ", notes.lower())
+    words = [w for w in clean.split() if len(w) > 3]  # filter short tokens
+    c = Counter(words)
+    return c.most_common(top_n)
+
+# Diagnosis categorization map (extendable)
+DIAGNOSIS_CATEGORIES = {
+    "cardiac": ["heart", "cardio", "myocardial", "angina", "herz", "herzinsuffizienz"],
+    "respiratory": ["pneumonia", "copd", "respiratory", "lungs", "lung", "asthma"],
+    "orthopedic": ["fracture", "orthopedic", "hip", "knee", "surgery", "arthro"],
+    "neurology": ["stroke", "neurolog", "seizure", "brain", "neuro"],
+    "infection": ["infection", "sepsis", "infect"],
+    "renal": ["renal", "kidney", "dialysis"],
+    "general": []
+}
+
+def categorize_diagnosis(text):
+    t = text.lower()
+    for cat, keywords in DIAGNOSIS_CATEGORIES.items():
+        for kw in keywords:
+            if kw in t:
+                return cat
+    return "other"
+
+# ---------------------------
+# UI: Header & Load Data
+# ---------------------------
+st.title(" NeuraNest – GDPR Local Analytics (Advanced)")
+
+lang = st.radio(" Language / Sprache:", ["Deutsch", "English"], horizontal=True)
+patients = load_patients()
+
+st.markdown("**Data storage:** Local encrypted JSON. All processing is local to this instance.")
+
+# ---------------------------
+# Left: Patient Management Panel
+# ---------------------------
+with st.sidebar:
+    st.header(" Patient Management")
+    with st.expander("➕ Add New Patient"):
+        with st.form("patient_form"):
+            name = st.text_input("Name", key="add_name")
+            age = st.number_input("Age" if lang == "English" else "Alter", 0, 120, 1, key="add_age")
+            diagnosis = st.text_input("Diagnosis" if lang == "English" else "Diagnose", key="add_diagnosis")
+            admission_date = st.date_input("Admission Date" if lang == "English" else "Aufnahmedatum", key="add_admission")
+            discharge_date = st.date_input("Discharge Date" if lang == "English" else "Entlassungsdatum", key="add_discharge")
+            notes = st.text_area("Notes" if lang == "English" else "Notizen", key="add_notes")
+            submitted = st.form_submit_button("Save Patient" if lang == "English" else "Patient speichern")
+
+        if submitted:
+            patients = load_patients()
+            new_id = (max([p["id"] for p in patients]) + 1) if patients else 1
+            patient = {
+                "id": new_id,
+                "name": name,
+                "age": age,
+                "diagnosis": diagnosis,
+                "admission_date": str(admission_date),
+                "discharge_date": str(discharge_date),
+                "notes": notes
+            }
+            patients.append(patient)
+            save_patients(patients)
+            st.success(f" Patient {name} saved!")
+            # reload
+            patients = load_patients()
+
+    st.write("---")
+    if patients:
+        selected_patient = st.selectbox("👤 Select Patient:", patients, format_func=lambda x: f"{x['name']} ({x['diagnosis']})", key="patient_select")
+        action = st.radio("Choose Action:", ["Generate Report", "Delete Patient", "Undo Last Delete"], horizontal=False)
+
+        if action == "Generate Report":
+            autonomy = st.radio("Autonomy Level:", [0,1,2], format_func=lambda x: ["AL0","AL1","AL2"][x], horizontal=False)
+            if st.button(" Generate Report"):
+                summary = generate_summary(selected_patient, autonomy, lang)
+                st.subheader(" Generated Report")
+                st.write(summary)
+                pdf_buffer = create_pdf(summary, selected_patient['name'])
+                st.download_button(" Download as PDF", data=pdf_buffer, file_name=f"{selected_patient['name']}_summary.pdf", mime="application/pdf")
+
+        elif action == "Delete Patient":
+            confirm_delete = st.checkbox(f"Confirm deletion of {selected_patient['name']}?")
+            if st.button("🗑 Delete Patient") and confirm_delete:
+                patients = delete_patient(selected_patient["id"])
+                st.success(f" Patient {selected_patient['name']} deleted.")
+                patients = load_patients()
+
+        elif action == "Undo Last Delete":
+            if st.button("↩ Restore Last Deleted Patient"):
+                patients = undo_delete()
+                patients = load_patients()
+
+    else:
+        st.info("No patients yet. Add a patient to begin analytics.")
+
+st.write("---")
+
+# ---------------------------
+# Analytics Main Area
+# ---------------------------
+df = preprocess_df(patients)
+
+if df.empty:
+    st.warning("No patient data available. Add patients from the left panel to view analytics.")
+else:
+    # Filters
+    st.subheader(" Filters")
+    col_a, col_b, col_c = st.columns([3,3,4])
     min_age, max_age = int(df["age"].min()), int(df["age"].max())
-    age_range = col_a.slider(_("Age Range", "Altersspanne"), min_value=min_age, max_value=max_age, value=(min_age, max_age))
-    date_range = col_b.date_input(_("Admission Date Range", "Aufnahmezeitraum"), [df["admission_date"].min(), df["discharge_date"].max()])
-    notes_search = col_c.text_input(_("Search in Notes", "Suche in Notizen"))
+    if min_age == max_age:
+        age_range = (min_age, max_age)
+        col_a.write(f"Only one age value: **{min_age}**")
+    else:
+        age_range = col_a.slider(
+            "Alter / Age Range",
+            min_value=min_age,
+            max_value=max_age,
+            value=(min_age, max_age)
+        )
 
+    date_range = col_b.date_input("Aufnahmezeitraum / Admission Date Range", [df["admission_date"].min().date(), df["admission_date"].max().date()])
+    notes_search = col_c.text_input("Suche in Notizen / Search in Notes")
+
+    # apply filters
     filtered_df = df[
         (df["age"] >= age_range[0]) & (df["age"] <= age_range[1]) &
-        (df["admission_date"] >= pd.to_datetime(date_range[0])) & (df["discharge_date"] <= pd.to_datetime(date_range[1]))
+        (df["admission_date"] >= pd.to_datetime(date_range[0])) & (df["admission_date"] <= pd.to_datetime(date_range[1]))
     ]
     if notes_search:
         filtered_df = filtered_df[filtered_df["notes"].str.contains(notes_search, case=False, na=False)]
 
-    st.write(_(f"Filtered Patients: {len(filtered_df)}", f"Gefilterte Patienten: {len(filtered_df)}"))
+    st.write(f"Gefilterte Patienten / Filtered Patients: **{len(filtered_df)}**")
 
-    if not filtered_df.empty:
-        st.subheader(_("Most Common Diagnoses", "Häufigste Diagnosen"))
+    # Compute KPIs
+    total_patients = len(filtered_df)
+    avg_los = filtered_df["length_of_stay"].mean()
+    median_los = filtered_df["length_of_stay"].median()
+    std_los = filtered_df["length_of_stay"].std()
+    most_common_diag = filtered_df["diagnosis"].value_counts().idxmax() if total_patients else "N/A"
+
+    # Compute readmission risk
+    risk_results = filtered_df.apply(lambda r: compute_readmission_risk(r), axis=1)
+    filtered_df["readmission_risk"] = [res[0] for res in risk_results]
+    filtered_df["risk_score"] = [res[1] for res in risk_results]
+
+    high_risk_count = len(filtered_df[filtered_df["readmission_risk"] == "High"])
+    medium_risk_count = len(filtered_df[filtered_df["readmission_risk"] == "Medium"])
+    low_risk_count = len(filtered_df[filtered_df["readmission_risk"] == "Low"])
+
+    # KPI Cards
+    k1, k2, k3, k4, k5 = st.columns(5)
+    k1.metric("Total Patients", total_patients)
+    k2.metric("Avg LOS (days)", f"{avg_los:.1f}" if not np.isnan(avg_los) else "N/A")
+    k3.metric("Median LOS (days)", f"{median_los:.1f}" if not np.isnan(median_los) else "N/A")
+    k4.metric("High Risk Patients", high_risk_count)
+    k5.metric("Most Common Diagnosis", most_common_diag)
+
+    st.write("---")
+
+    # ---------------------------
+    # Top Row Charts: Diagnosis counts & Age distribution
+    # ---------------------------
+    col1, col2 = st.columns((2,1))
+    with col1:
+        st.subheader(" Häufigste Diagnosen / Most Common Diagnoses")
         diag_counts = filtered_df["diagnosis"].value_counts()
-        fig1, ax1 = plt.subplots()
-        diag_counts.plot(kind="bar", ax=ax1, color="skyblue")
+        fig1, ax1 = plt.subplots(figsize=(8,4))
+        diag_counts.plot(kind="bar", ax=ax1)
+        ax1.set_ylabel("Count")
         plt.xticks(rotation=45, ha="right")
         st.pyplot(fig1)
 
-        st.subheader(_("Age Distribution", "Altersverteilung"))
-        fig2, ax2 = plt.subplots()
-        filtered_df["age"].plot(kind="hist", bins=10, ax=ax2, color="lightgreen")
+    with col2:
+        st.subheader(" Altersverteilung / Age Distribution")
+        fig2, ax2 = plt.subplots(figsize=(4,4))
+        filtered_df["age"].plot(kind="hist", bins=10, ax=ax2)
+        ax2.set_xlabel("Age")
         st.pyplot(fig2)
 
-        st.subheader(_("Length of Stay", "Aufenthaltsdauer"))
-        fig3, ax3 = plt.subplots()
-        filtered_df.plot(x="name", y="length_of_stay", kind="bar", ax=ax3, color="salmon")
+    st.write("---")
+
+    # ---------------------------
+    # LOS analytics and trends
+    # ---------------------------
+    st.subheader(" Length of Stay Analysis & Trends")
+    col_l1, col_l2 = st.columns(2)
+    with col_l1:
+        st.markdown("**Summary statistics**")
+        st.write({
+            "Average LOS (days)": float(avg_los) if not np.isnan(avg_los) else None,
+            "Median LOS (days)": float(median_los) if not np.isnan(median_los) else None,
+            "Std Dev (days)": float(std_los) if not np.isnan(std_los) else None,
+            "Min LOS": int(filtered_df["length_of_stay"].min()),
+            "Max LOS": int(filtered_df["length_of_stay"].max())
+        })
+
+    with col_l2:
+        st.markdown("**LOS by Diagnosis (avg)**")
+        los_by_diag = filtered_df.groupby("diagnosis")["length_of_stay"].mean().sort_values(ascending=False)
+        fig_l2, ax_l2 = plt.subplots(figsize=(6,3))
+        los_by_diag.plot(kind="bar", ax=ax_l2)
         plt.xticks(rotation=45, ha="right")
-        st.pyplot(fig3)
+        st.pyplot(fig_l2)
+
+    # Trend by month
+    st.markdown("**Admissions & Average LOS by Month**")
+    monthly = filtered_df.resample("M", on="admission_date").agg({"id":"count", "length_of_stay":"mean"})
+    monthly = monthly.rename(columns={"id":"admissions", "length_of_stay":"avg_los"})
+    fig_m, ax_m = plt.subplots(figsize=(10,3))
+    ax_m2 = ax_m.twinx()
+    monthly["admissions"].plot(ax=ax_m, kind="bar", width=0.6, position=1)
+    monthly["avg_los"].plot(ax=ax_m2, marker='o', linewidth=2, color='orange')
+    ax_m.set_ylabel("Admissions")
+    ax_m2.set_ylabel("Avg LOS")
+    st.pyplot(fig_m)
+
+    st.write("---")
+
+    # ---------------------------
+    # Diagnosis categories mapping
+    # ---------------------------
+    st.subheader(" Diagnosis Categories")
+    filtered_df["diag_category"] = filtered_df["diagnosis"].apply(categorize_diagnosis)
+    cat_counts = filtered_df["diag_category"].value_counts()
+    fig_cat, ax_cat = plt.subplots(figsize=(8,3))
+    cat_counts.plot(kind="bar", ax=ax_cat)
+    plt.xticks(rotation=30)
+    ax_cat.set_ylabel("Count")
+    st.pyplot(fig_cat)
+
+    st.write("---")
+
+    # ---------------------------
+    # Admission load & weekday patterns
+    # ---------------------------
+    st.subheader(" Admission Load & Weekday Patterns")
+    filtered_df["admit_weekday"] = filtered_df["admission_date"].dt.day_name()
+    weekday_counts = filtered_df["admit_weekday"].value_counts().reindex([
+        "Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"
+    ]).fillna(0)
+    fig_w, ax_w = plt.subplots(figsize=(8,2))
+    weekday_counts.plot(kind="bar", ax=ax_w)
+    ax_w.set_ylabel("Admissions")
+    st.pyplot(fig_w)
+
+    st.write("---")
+
+    # ---------------------------
+    # Notes keyword insights
+    # ---------------------------
+    st.subheader(" Notes Keyword Insights")
+    all_notes = " ".join(filtered_df["notes"].tolist())
+    keywords = extract_keywords(all_notes, top_n=20)
+    if keywords:
+        kw_df = pd.DataFrame(keywords, columns=["keyword","count"])
+        st.table(kw_df.head(10))
+    else:
+        st.info("No significant keywords found in notes.")
+
+    st.write("---")
+
+    # ---------------------------
+    # High-risk patients table and patient timeline
+    # ---------------------------
+    st.subheader(" High / Medium Risk Patients")
+    risk_table = filtered_df.sort_values(by="risk_score", ascending=False)[["id","name","age","diagnosis","length_of_stay","readmission_risk","risk_score","admission_date","discharge_date"]]
+    st.dataframe(risk_table.reset_index(drop=True), height=250)
+
+    st.write("---")
+    st.subheader(" Patient Journey Timeline")
+    patient_selection = st.selectbox("Select patient for timeline:", filtered_df.to_dict("records"), format_func=lambda x: f"{x['name']} ({x['diagnosis']})")
+    # Show timeline
+    st.markdown(f"**{patient_selection['name']}** — Admission: {patient_selection['admission_date'].date()} — Discharge: {patient_selection['discharge_date'].date()} — LOS: {patient_selection['length_of_stay']} days")
+    st.write("Notes:")
+    st.write(patient_selection["notes"])
+
+    # ---------------------------
+    # Export filtered data
+    # ---------------------------
+    st.write("---")
+    st.subheader(" Export / Download")
+    csv_bytes = filtered_df.to_csv(index=False).encode("utf-8")
+    st.download_button(" Download Filtered Data (CSV)", data=csv_bytes, file_name="filtered_patients.csv", mime="text/csv")
+    # Also allow exporting anonymized summary
+    anon_df = filtered_df.copy()
+    anon_df = anon_df.drop(columns=["name","notes"])
+    st.download_button(" Download Anonymized Summary (CSV)", data=anon_df.to_csv(index=False).encode("utf-8"), file_name="anonymized_summary.csv", mime="text/csv")
+
+# End of file
