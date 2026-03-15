@@ -1,0 +1,15 @@
+secret.key
+patients.json
+*.json
+.venv/
+__pycache__/
+*.pyc
+build/
+dist/
+*.spec
+.idea/
+.DS_Store
+app/data/
+*.db
+*.db.enc
+neuracare.db

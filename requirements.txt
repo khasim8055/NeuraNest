@@ -3,4 +3,4 @@ cryptography
 pandas
 matplotlib
 reportlab
-
+numpy
