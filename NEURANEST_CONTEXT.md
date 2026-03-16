@@ -87,10 +87,11 @@ A doctor opens the app, adds a patient, generates a professional discharge lette
 - [ ] Minimum data guard on monthly chart (only render if 60+ days of data)
 
 ### EXPORT
-- [x] PDF discharge summary download
-- [x] Filtered data CSV export
-- [x] Anonymised summary CSV export
-
+### EXPORT
+- [x] PDF discharge summary per patient    ← core feature
+- [x] Anonymised CSV export                ← keep
+- [x] Audit log CSV export                 ← GDPR compliance
+- [ ] ~~Full patient CSV export~~          ← REMOVED — security risk
 ### DESKTOP PRODUCT
 - [ ] PyQt6 main window (3-panel layout)
 - [ ] PyInstaller .exe packaging for Windows 10/11
@@ -104,6 +105,7 @@ A doctor opens the app, adds a patient, generates a professional discharge lette
 - ~~Notes keyword frequency table~~ — no NLP context = noise, not insight
 - ~~Diagnosis category chart~~ — duplicate of diagnosis frequency chart
 - ~~Counter / re imports~~ — removed with the features above
+- [ ] ~~Full patient CSV export~~          ← REMOVED — security risk
 
 ---
 
