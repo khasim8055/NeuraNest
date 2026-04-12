@@ -125,6 +125,32 @@ class Database:
         return dict(zip(cols, row)) if row else None
 
 
+# ── Initialisation helper ────────────────────────────────────────
+
+def init_db():
+    """
+    Initialise the database on first run.
+    Creates the data directory and all tables from schema.sql.
+    Safe to call multiple times — uses CREATE TABLE IF NOT EXISTS.
+    """
+    import sqlite3
+    schema_path = Path(__file__).parent.parent / "schema.sql"
+    db_path     = Path(__file__).parent.parent / "data" / "neuranest.db"
+
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if not schema_path.exists():
+        raise FileNotFoundError(f"schema.sql not found at {schema_path}")
+
+    with open(schema_path, "r") as f:
+        schema_sql = f.read()
+
+    conn = sqlite3.connect(str(db_path))
+    conn.executescript(schema_sql)
+    conn.commit()
+    conn.close()
+
+
 # ── Quick connection test ────────────────────────────────────────
 if __name__ == "__main__":
     print("Testing database connection...")
