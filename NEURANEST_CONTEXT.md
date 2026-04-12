@@ -126,7 +126,7 @@ A doctor opens the app, adds a patient, generates a professional discharge lette
 |---------|------------------------------------------------|---------|
 | 1–5     | PyCharm + GitHub setup, SQLite schema          | DONE   |
 | 6–15    | User auth (bcrypt), real audit log, key backup | DONE    |
-| 16–28   | PyQt6 desktop UI (3 panels, patient form)      | TODO    |
+| 16–28   | PyQt6 desktop UI (3 panels, patient form)      | IN PROGRESS     |
 | 29–42   | Document generation + Ollama AL3 + Arztbrief   | TODO    |
 | 43–53   | Analytics dashboard (5 charts) + export        | TODO    |
 | 54–63   | PyInstaller packaging + Windows .exe           | TODO    |

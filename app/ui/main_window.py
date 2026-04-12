@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from app.core.auth    import authenticate, Session
 from app.core.audit   import log_login, log_logout
 from app.core.patients import get_all_patients, get_patient_count
+from app.ui.patient_form import PatientForm
 
 
 # ================================================================
@@ -476,12 +477,13 @@ class PatientListPanel(QFrame):
 
 class CenterPanel(QWidget):
     """
-    Center panel — shows patient detail or welcome screen.
-    Will be expanded in Day 6 with full patient form.
+    Center panel — shows patient detail, form, or welcome screen.
     """
 
-    def __init__(self):
+    def __init__(self, on_form_save=None, on_form_cancel=None):
         super().__init__()
+        self.on_form_save   = on_form_save
+        self.on_form_cancel = on_form_cancel
         self._build_ui()
 
     def _build_ui(self):
@@ -490,9 +492,35 @@ class CenterPanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.stack)
 
-        # Welcome screen (shown when no patient selected)
+        # Welcome screen (index 0)
         self.welcome = self._make_welcome()
         self.stack.addWidget(self.welcome)
+
+        # Patient form (index 1) — reused for add and edit
+        self.form = PatientForm(
+            on_save=self._handle_form_save,
+            on_cancel=self._handle_form_cancel,
+        )
+        self.stack.addWidget(self.form)
+
+    def show_form_new(self):
+        """Show empty form for adding a new patient."""
+        self.form.clear()
+        self.stack.setCurrentWidget(self.form)
+
+    def show_form_edit(self, patient: dict):
+        """Show form pre-filled for editing a patient."""
+        self.form.load_patient(patient)
+        self.stack.setCurrentWidget(self.form)
+
+    def _handle_form_save(self, patient_id: int, is_new: bool):
+        if self.on_form_save:
+            self.on_form_save(patient_id, is_new)
+
+    def _handle_form_cancel(self):
+        self.stack.setCurrentWidget(self.welcome)
+        if self.on_form_cancel:
+            self.on_form_cancel()
 
     def _make_welcome(self) -> QWidget:
         w = QWidget()
@@ -819,7 +847,10 @@ class MainWindow(QMainWindow):
         )
 
         # Center panel
-        self.center = CenterPanel()
+        self.center = CenterPanel(
+            on_form_save=self._on_form_saved,
+            on_form_cancel=self._on_form_cancelled,
+        )
 
         # Right panel
         self.right_panel = RightPanel(
@@ -883,12 +914,28 @@ class MainWindow(QMainWindow):
             )
 
     def _on_new_patient(self):
-        """Called when New Patient button is clicked."""
-        self.center.show_welcome()
+        """Called when New Patient button is clicked — show add form."""
+        self.center.show_form_new()
         self.right_panel.update_patient(None)
+        self.status.showMessage("New patient  |  NeuraCare v1.0")
+
+    def _on_form_saved(self, patient_id: int, is_new: bool):
+        """Called after form saves successfully."""
+        from app.core.patients import get_patient
+        patient = get_patient(patient_id)
+        self.patient_list.refresh()
+        if patient:
+            self.center.show_patient(patient)
+            self.right_panel.update_patient(patient)
+        action = "Created" if is_new else "Updated"
+        name = patient.get("name", "") if patient else ""
         self.status.showMessage(
-            "New patient — form coming in Day 6  |  NeuraCare v1.0"
+            f"{action}: {name}  |  NeuraCare v1.0"
         )
+
+    def _on_form_cancelled(self):
+        """Called when form cancel is clicked."""
+        self.status.showMessage("Cancelled  |  NeuraCare v1.0")
 
     def _on_generate(self, patient):
         if patient:
@@ -906,10 +953,11 @@ class MainWindow(QMainWindow):
             )
 
     def _on_edit(self, patient):
+        """Show edit form for selected patient."""
         if patient:
-            QMessageBox.information(
-                self, "Edit Patient",
-                f"Patient edit form for {patient.get('name','')} — coming in Day 6."
+            self.center.show_form_edit(patient)
+            self.status.showMessage(
+                f"Editing: {patient.get('name','')}  |  NeuraCare v1.0"
             )
 
     def _on_delete(self, patient):
