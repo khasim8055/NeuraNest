@@ -12,7 +12,11 @@ import json
 import tempfile
 
 # ── Paths ────────────────────────────────────────────────────────
-BASE_DIR   = Path(__file__).parent.parent
+# Support both development and PyInstaller packaged paths
+import os as _os
+_env_base  = _os.environ.get('NEURACARE_BASE_DIR')
+_app_dir   = Path(__file__).parent.parent
+BASE_DIR   = Path(_env_base) / 'app' if _env_base else _app_dir
 DATA_DIR   = BASE_DIR / "data"
 DB_FILE    = DATA_DIR / "neuranest.db"
 KEY_FILE   = BASE_DIR / "secret.key"

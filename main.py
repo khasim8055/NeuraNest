@@ -1,19 +1,31 @@
 # main.py
 # ================================================================
 # NeuraCare — Application Entry Point
-# Run with: python main.py
 # ================================================================
-# This file:
-#   1. Initialises the database if first run
-#   2. Creates default admin account if no users exist
-#   3. Launches the PyQt6 desktop window
+# Run with:   python main.py          (development)
+# Packaged:   NeuraCare.exe           (production)
 # ================================================================
 
 import sys
+import os
 from pathlib import Path
 
-# Ensure project root is in path
-sys.path.insert(0, str(Path(__file__).parent))
+
+def get_base_dir() -> Path:
+    """
+    Get base directory — works in development and PyInstaller bundle.
+    """
+    if getattr(sys, "frozen", False):
+        # Running as PyInstaller .exe — data lives next to the .exe
+        return Path(sys.executable).parent
+    else:
+        # Development — data lives next to main.py
+        return Path(__file__).parent
+
+
+BASE_DIR = get_base_dir()
+sys.path.insert(0, str(BASE_DIR))
+os.environ["NEURACARE_BASE_DIR"] = str(BASE_DIR)
 
 from app.core.database import init_db
 from app.core.auth     import setup_first_admin
@@ -21,19 +33,10 @@ from app.ui.main_window import run
 
 
 def bootstrap():
-    """
-    Run once on first launch:
-    - Create database and tables
-    - Create default admin account
-    """
-    # Ensure data directory exists
-    data_dir = Path(__file__).parent / "app" / "data"
+    """First-run setup: create DB and admin account."""
+    data_dir = BASE_DIR / "app" / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
-
-    # Initialise database (creates tables from schema.sql)
     init_db()
-
-    # Create default admin if no users exist
     success, msg = setup_first_admin(
         username="admin",
         password="NeuraCare2024!",
@@ -41,10 +44,9 @@ def bootstrap():
     )
     if success:
         print("=" * 55)
-        print("  First run — default admin account created.")
-        print("  Username: admin")
-        print("  Password: NeuraCare2024!")
-        print("  CHANGE THIS PASSWORD after first login.")
+        print("  NeuraCare — First Launch")
+        print("  Username: admin  |  Password: NeuraCare2024!")
+        print("  Please change your password after first login.")
         print("=" * 55)
 
 

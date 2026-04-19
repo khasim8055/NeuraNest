@@ -12,10 +12,13 @@
 import bcrypt
 import sqlite3
 from datetime import datetime
+import os
 from pathlib import Path
 
 # ── Paths ────────────────────────────────────────────────────────
-BASE_DIR = Path(__file__).parent.parent.parent
+# Support both development and PyInstaller packaged paths
+_env_base = os.environ.get('NEURACARE_BASE_DIR')
+BASE_DIR = Path(_env_base) if _env_base else Path(__file__).parent.parent.parent
 DB_FILE  = BASE_DIR / "app" / "data" / "neuranest.db"
 
 

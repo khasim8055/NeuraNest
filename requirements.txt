@@ -1,6 +1,8 @@
-streamlit
-cryptography
-pandas
-matplotlib
-reportlab
-numpy
+PyQt6>=6.6.0
+matplotlib>=3.7.0
+reportlab>=4.0.0
+bcrypt>=4.0.0
+cryptography>=41.0.0
+SQLAlchemy>=2.0.0
+requests>=2.31.0
+pyinstaller>=6.0.0
