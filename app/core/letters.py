@@ -484,10 +484,8 @@ def generate_letter(
         elif level == 2:
             text = generate_al2(patient, lang)
         elif level == 3:
-            return False, "", (
-                "AL3 (AI-generated) is coming in Day 9. "
-                "Please use AL0, AL1, or AL2 for now."
-            )
+            from app.core.ollama_client import generate_al3
+            return generate_al3(patient, lang)
         else:
             return False, "", f"Unknown level: {level}"
 

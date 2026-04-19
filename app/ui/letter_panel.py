@@ -144,19 +144,19 @@ class LetterPanel(QWidget):
         self.level_group = QButtonGroup()
         self._level_btns = {}
 
-        level_names = {0: "0", 1: "1", 2: "2"}
+        level_names = {0: "0", 1: "1", 2: "2", 3: "3 (AI)"}
         for lvl, name in level_names.items():
             btn = QPushButton(name)
             btn.setCheckable(True)
             btn.setChecked(lvl == 1)
-            btn.setFixedSize(48, 30)
-            btn.setStyleSheet(self._level_btn_style(lvl == 1))
+            btn.setFixedSize(60 if lvl == 3 else 48, 30)
+            btn.setStyleSheet(self._level_btn_style(lvl == 1, is_ai=(lvl == 3)))
             btn.clicked.connect(lambda checked, l=lvl: self._on_level_changed(l))
             self.level_group.addButton(btn)
             self._level_btns[lvl] = btn
 
         ctrl_layout.addWidget(level_label)
-        for lvl in [0, 1, 2]:
+        for lvl in [0, 1, 2, 3]:
             ctrl_layout.addWidget(self._level_btns[lvl])
 
         # Language toggle
@@ -204,6 +204,7 @@ class LetterPanel(QWidget):
             QPushButton:hover {{ background-color: #63C899; }}
         """)
         self.generate_btn.setFixedHeight(32)
+        self.generate_btn.setFixedWidth(120)
         self.generate_btn.clicked.connect(self._on_generate)
         ctrl_layout.addWidget(self.generate_btn)
 
@@ -224,6 +225,7 @@ class LetterPanel(QWidget):
             }}
         """)
         self.copy_btn.setFixedHeight(32)
+        self.copy_btn.setFixedWidth(90)
         self.copy_btn.setEnabled(False)
         self.copy_btn.clicked.connect(self._on_copy)
         ctrl_layout.addWidget(self.copy_btn)
@@ -273,15 +275,16 @@ class LetterPanel(QWidget):
     # STYLE HELPERS
     # ================================================================
 
-    def _level_btn_style(self, active: bool) -> str:
+    def _level_btn_style(self, active: bool, is_ai: bool = False) -> str:
+        active_color = COLORS['accent_amber'] if is_ai else COLORS['accent_blue']
         if active:
             return f"""
                 QPushButton {{
-                    background-color: {COLORS['accent_blue']};
+                    background-color: {active_color};
                     color: white;
                     border: none;
                     border-radius: 5px;
-                    font-size: 11px;
+                    font-size: 10px;
                     font-weight: bold;
                 }}
             """
@@ -291,10 +294,10 @@ class LetterPanel(QWidget):
                 color: {COLORS['text_muted']};
                 border: 1px solid {COLORS['border']};
                 border-radius: 5px;
-                font-size: 11px;
+                font-size: 10px;
             }}
             QPushButton:hover {{
-                border-color: {COLORS['accent_blue']};
+                border-color: {active_color};
                 color: {COLORS['text_primary']};
             }}
         """
@@ -352,7 +355,7 @@ class LetterPanel(QWidget):
         self._level = level
         # Update button styles
         for lvl, btn in self._level_btns.items():
-            btn.setStyleSheet(self._level_btn_style(lvl == level))
+            btn.setStyleSheet(self._level_btn_style(lvl == level, is_ai=(lvl == 3)))
         # Update description
         info = LEVEL_INFO.get(level, {})
         key = "description" if self._lang == "Deutsch" else "description_en"
@@ -383,7 +386,15 @@ class LetterPanel(QWidget):
             return
 
         self.generate_btn.setEnabled(False)
-        self.generate_btn.setText("Generating…")
+        if self._level == 3:
+            self.generate_btn.setText("AI generating… (15-30s)")
+            self.preview.setPlainText(
+                "Ollama + Mistral is generating your letter…\n\n"
+                "This takes 15-30 seconds on first run.\n"
+                "Please wait."
+            )
+        else:
+            self.generate_btn.setText("Generating…")
 
         ok, text, error = generate_letter(
             self._patient,
