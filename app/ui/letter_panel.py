@@ -136,7 +136,7 @@ class LetterPanel(QWidget):
         ctrl_layout.setSpacing(16)
 
         # AL Level selector
-        level_label = QLabel("Level:")
+        level_label = QLabel("Level: AL")
         level_label.setStyleSheet(
             f"color: {COLORS['text_muted']}; font-size: 11px;"
         )
@@ -144,7 +144,7 @@ class LetterPanel(QWidget):
         self.level_group = QButtonGroup()
         self._level_btns = {}
 
-        level_names = {0: "AL0", 1: "AL1", 2: "AL2"}
+        level_names = {0: "0", 1: "1", 2: "2"}
         for lvl, name in level_names.items():
             btn = QPushButton(name)
             btn.setCheckable(True)
@@ -154,7 +154,6 @@ class LetterPanel(QWidget):
             btn.clicked.connect(lambda checked, l=lvl: self._on_level_changed(l))
             self.level_group.addButton(btn)
             self._level_btns[lvl] = btn
-            ctrl_layout.addWidget(btn) if lvl == 0 else None
 
         ctrl_layout.addWidget(level_label)
         for lvl in [0, 1, 2]:
@@ -430,9 +429,37 @@ class LetterPanel(QWidget):
             QTimer.singleShot(2000, lambda: self.copy_btn.setText("Copy Text"))
 
     def _on_export_pdf(self):
-        """Trigger PDF export — wired to main window callback."""
-        if self.on_pdf and self._patient and self._letter_text:
-            self.on_pdf(self._patient, self._letter_text)
+        """Export discharge letter as PDF and open it."""
+        if not self._patient or not self._letter_text:
+            return
+
+        from app.core.pdf_exporter import export_and_open
+        self.pdf_btn.setEnabled(False)
+        self.pdf_btn.setText("Exporting…")
+
+        ok, file_path, err = export_and_open(
+            self._patient,
+            self._letter_text,
+            lang=self._lang,
+            level=self._level,
+        )
+
+        if ok:
+            # Notify main window
+            if self.on_pdf:
+                self.on_pdf(self._patient, file_path)
+            self.pdf_btn.setText("PDF Saved ✓")
+            from PyQt6.QtCore import QTimer
+            QTimer.singleShot(3000, lambda: self.pdf_btn.setText("Export PDF"))
+        else:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self, "PDF Export Failed",
+                f"Could not export PDF:\n{err}"
+            )
+            self.pdf_btn.setText("Export PDF")
+
+        self.pdf_btn.setEnabled(True)
 
     def _on_close(self):
         """Go back to patient detail view."""

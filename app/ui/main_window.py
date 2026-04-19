@@ -968,12 +968,18 @@ class MainWindow(QMainWindow):
                 f"Discharge letter — {patient.get('name','')}  |  NeuraCare v1.0"
             )
 
-    def _on_pdf(self, patient):
+    def _on_pdf(self, patient, file_path: str = ""):
+        """Called after PDF is exported — show status."""
         if patient:
-            QMessageBox.information(
-                self, "Export PDF",
-                f"PDF export for {patient.get('name','')} — coming in Day 8."
-            )
+            name = patient.get('name', '')
+            if file_path:
+                self.status.showMessage(
+                    f"PDF saved: {file_path}  |  NeuraCare v1.0"
+                )
+            else:
+                self.status.showMessage(
+                    f"PDF exported for {name}  |  NeuraCare v1.0"
+                )
 
     def _on_edit(self, patient):
         """Show edit form for selected patient."""
