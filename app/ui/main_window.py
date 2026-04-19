@@ -33,6 +33,7 @@ from app.core.audit   import log_login, log_logout
 from app.core.patients import get_all_patients, get_patient_count
 from app.ui.patient_form import PatientForm
 from app.ui.letter_panel import LetterPanel
+from app.ui.analytics_panel import AnalyticsPanel
 
 
 # ================================================================
@@ -512,6 +513,12 @@ class CenterPanel(QWidget):
         )
         self.stack.addWidget(self.letter_panel)
 
+        # Analytics panel (index 3)
+        self.analytics = AnalyticsPanel(
+            on_close=self._handle_analytics_close,
+        )
+        self.stack.addWidget(self.analytics)
+
     def show_form_new(self):
         """Show empty form for adding a new patient."""
         self.form.clear()
@@ -543,6 +550,15 @@ class CenterPanel(QWidget):
 
     def _handle_letter_close(self):
         """Go back to patient detail on close."""
+        self.stack.setCurrentWidget(self.welcome)
+
+    def show_analytics(self):
+        """Show the analytics dashboard."""
+        self.analytics.refresh()
+        self.stack.setCurrentWidget(self.analytics)
+
+    def _handle_analytics_close(self):
+        """Go back to welcome on analytics close."""
         self.stack.setCurrentWidget(self.welcome)
 
     def _make_welcome(self) -> QWidget:
@@ -759,6 +775,23 @@ class RightPanel(QFrame):
         self.session_label.setWordWrap(True)
         layout.addWidget(self.session_label)
 
+        analytics_btn = QPushButton("Practice Analytics")
+        analytics_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {COLORS['bg_card']};
+                color: {COLORS['text_primary']};
+                border: 1px solid {COLORS['border']};
+                border-radius: 6px;
+                padding: 6px 16px;
+                font-size: 12px;
+            }}
+            QPushButton:hover {{ border-color: {COLORS['accent_blue']}; }}
+        """)
+        analytics_btn.setFixedHeight(38)
+        self._analytics_callback = lambda: None
+        analytics_btn.clicked.connect(lambda: self._analytics_callback())
+        layout.addWidget(analytics_btn)
+
         logout_btn = QPushButton("Log Out")
         logout_btn.setObjectName("secondary")
         logout_btn.setFixedHeight(32)
@@ -883,6 +916,7 @@ class MainWindow(QMainWindow):
             on_delete=self._on_delete,
         )
         self.right_panel.set_logout_callback(self._on_logout)
+        self.right_panel._analytics_callback = self._on_analytics
 
         layout.addWidget(self.patient_list)
         layout.addWidget(self.center, stretch=1)
@@ -935,6 +969,12 @@ class MainWindow(QMainWindow):
             self.status.showMessage(
                 f"Viewing: {patient.get('name', '')}  |  NeuraCare v1.0"
             )
+
+    def _on_analytics(self):
+        """Show analytics dashboard."""
+        self.center.show_analytics()
+        self.right_panel.update_patient(None)
+        self.status.showMessage("Practice Analytics  |  NeuraCare v1.0")
 
     def _on_new_patient(self):
         """Called when New Patient button is clicked — show add form."""
