@@ -498,6 +498,7 @@ class CenterPanel(QWidget):
         # Welcome screen (index 0)
         self.welcome = self._make_welcome()
         self.stack.addWidget(self.welcome)
+        self._detail_widget = None
 
         # Patient form (index 1) — reused for add and edit
         self.form = PatientForm(
@@ -583,14 +584,18 @@ class CenterPanel(QWidget):
         self.stack.setCurrentWidget(self.welcome)
 
     def show_patient(self, patient: dict):
-        """Show patient detail — full form built in Day 6."""
-        # Remove old detail widget if exists
-        if self.stack.count() > 1:
-            old = self.stack.widget(1)
-            self.stack.removeWidget(old)
-            old.deleteLater()
+        """Show patient detail view."""
+        # Safely remove old detail widget
+        if hasattr(self, '_detail_widget') and self._detail_widget is not None:
+            try:
+                self.stack.removeWidget(self._detail_widget)
+                self._detail_widget.setParent(None)
+            except RuntimeError:
+                pass
+            self._detail_widget = None
 
         detail = self._make_patient_detail(patient)
+        self._detail_widget = detail
         self.stack.addWidget(detail)
         self.stack.setCurrentWidget(detail)
 
@@ -791,6 +796,7 @@ class RightPanel(QFrame):
         self._analytics_callback = lambda: None
         analytics_btn.clicked.connect(lambda: self._analytics_callback())
         layout.addWidget(analytics_btn)
+        self._analytics_callback = lambda: None  # set by MainWindow
 
         logout_btn = QPushButton("Log Out")
         logout_btn.setObjectName("secondary")
