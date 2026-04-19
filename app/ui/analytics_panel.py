@@ -356,6 +356,21 @@ class AnalyticsPanel(QWidget):
         refresh_btn.setFixedHeight(32)
         refresh_btn.clicked.connect(self.refresh)
 
+        export_btn = QPushButton("Export CSV")
+        export_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {COLORS['accent_green']};
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 6px 16px;
+                font-size: 12px;
+            }}
+            QPushButton:hover {{ background-color: #63C899; }}
+        """)
+        export_btn.setFixedHeight(32)
+        export_btn.clicked.connect(self._on_export)
+
         if self.on_close:
             close_btn = QPushButton("Close")
             close_btn.setStyleSheet(refresh_btn.styleSheet())
@@ -366,6 +381,8 @@ class AnalyticsPanel(QWidget):
 
         header_layout.addWidget(title, stretch=1)
         header_layout.addWidget(refresh_btn)
+        header_layout.addSpacing(8)
+        header_layout.addWidget(export_btn)
 
         # ── Scrollable body ───────────────────────────────────────
         scroll = QScrollArea()
@@ -495,6 +512,19 @@ class AnalyticsPanel(QWidget):
         layout.setContentsMargins(8, 8, 8, 8)
         layout.addWidget(canvas)
         return card
+
+    def _on_export(self):
+        """Export anonymised CSV and show result."""
+        from app.core.csv_export import export_anonymised_patients
+        from PyQt6.QtWidgets import QMessageBox
+        ok, path, err = export_anonymised_patients()
+        if ok:
+            QMessageBox.information(
+                self, "Export Complete",
+                f"Anonymised data saved to:\n{path}"
+            )
+        else:
+            QMessageBox.warning(self, "Export Failed", err)
 
     def refresh(self):
         """Reload all data and redraw charts."""
