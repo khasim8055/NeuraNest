@@ -32,6 +32,7 @@ from app.core.auth    import authenticate, Session
 from app.core.audit   import log_login, log_logout
 from app.core.patients import get_all_patients, get_patient_count
 from app.ui.patient_form import PatientForm
+from app.ui.letter_panel import LetterPanel
 
 
 # ================================================================
@@ -480,10 +481,11 @@ class CenterPanel(QWidget):
     Center panel — shows patient detail, form, or welcome screen.
     """
 
-    def __init__(self, on_form_save=None, on_form_cancel=None):
+    def __init__(self, on_form_save=None, on_form_cancel=None, on_letter_pdf=None):
         super().__init__()
         self.on_form_save   = on_form_save
         self.on_form_cancel = on_form_cancel
+        self.on_letter_pdf  = on_letter_pdf
         self._build_ui()
 
     def _build_ui(self):
@@ -503,6 +505,13 @@ class CenterPanel(QWidget):
         )
         self.stack.addWidget(self.form)
 
+        # Letter panel (index 2) — discharge letter generation
+        self.letter_panel = LetterPanel(
+            on_pdf=self._handle_letter_pdf,
+            on_close=self._handle_letter_close,
+        )
+        self.stack.addWidget(self.letter_panel)
+
     def show_form_new(self):
         """Show empty form for adding a new patient."""
         self.form.clear()
@@ -521,6 +530,20 @@ class CenterPanel(QWidget):
         self.stack.setCurrentWidget(self.welcome)
         if self.on_form_cancel:
             self.on_form_cancel()
+
+    def show_letter(self, patient: dict):
+        """Show discharge letter panel for a patient."""
+        self.letter_panel.load_patient(patient)
+        self.stack.setCurrentWidget(self.letter_panel)
+
+    def _handle_letter_pdf(self, patient, letter_text):
+        """Pass PDF request up to main window."""
+        if self.on_form_save:
+            pass  # PDF export wired in Day 8
+
+    def _handle_letter_close(self):
+        """Go back to patient detail on close."""
+        self.stack.setCurrentWidget(self.welcome)
 
     def _make_welcome(self) -> QWidget:
         w = QWidget()
@@ -938,11 +961,11 @@ class MainWindow(QMainWindow):
         self.status.showMessage("Cancelled  |  NeuraCare v1.0")
 
     def _on_generate(self, patient):
+        """Show discharge letter panel for selected patient."""
         if patient:
-            QMessageBox.information(
-                self, "Generate Letter",
-                f"Discharge letter generation for {patient.get('name','')} "
-                f"— coming in Day 8."
+            self.center.show_letter(patient)
+            self.status.showMessage(
+                f"Discharge letter — {patient.get('name','')}  |  NeuraCare v1.0"
             )
 
     def _on_pdf(self, patient):
