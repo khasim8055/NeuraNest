@@ -1,4 +1,4 @@
-# main.py
+﻿# main.py
 # ================================================================
 # NeuraCare — Application Entry Point
 # ================================================================
@@ -45,7 +45,7 @@ def bootstrap():
     if success:
         print("=" * 55)
         print("  NeuraCare — First Launch")
-        print("  Username: admin  |  Password: NeuraCare2024!")
+        print("  Default admin account created. Log in and change your password.")
         print("  Please change your password after first login.")
         print("=" * 55)
 
