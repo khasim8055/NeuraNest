@@ -128,7 +128,6 @@ pip install -r requirements.txt
 
 # First run — creates database and default admin
 python main.py
-# Username: admin  |  Password: NeuraCare2024!
 
 # Seed demo patients (optional)
 python demo_seed.py
