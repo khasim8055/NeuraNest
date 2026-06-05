@@ -78,10 +78,9 @@ def get_risk_label_de(risk: str) -> str:
     return {"Low": "Niedrig", "Medium": "Mittel", "High": "Hoch"}.get(risk, risk)
 
 
-def get_risk_explanation(patient: dict) -> list[str]:
+def get_risk_explanation(patient: dict, lang: str = "English") -> list[str]:
     """
-    Return plain-English list of reasons for the risk score.
-    Used in UI to explain why a patient is High/Medium/Low risk.
+    Return list of reasons for the risk score in the specified language.
     EU AI Act Article 13 — explainability requirement.
     """
     reasons = []
@@ -91,31 +90,43 @@ def get_risk_explanation(patient: dict) -> list[str]:
     notes = str(patient.get("notes", "") or "").lower()
     los   = int(patient.get("length_of_stay", 0) or 0)
 
-    if age >= 80:
-        reasons.append(f"Age {age} — patients over 80 have higher readmission rates")
-    elif age >= 65:
-        reasons.append(f"Age {age} — patients over 65 have elevated readmission risk")
+    if lang == "Deutsch":
+        if age >= 80:
+            reasons.append(f"Alter {age} Jahre — Patienten über 80 haben erhöhtes Wiederaufnahmerisiko")
+        elif age >= 65:
+            reasons.append(f"Alter {age} Jahre — Patienten über 65 haben erhöhtes Wiederaufnahmerisiko")
 
-    matched_chronic = [k for k in CHRONIC_KEYWORDS
-                       if k in diag or k in notes]
-    if matched_chronic:
-        reasons.append(
-            f"Chronic condition detected: {', '.join(matched_chronic[:2])}"
-        )
+        matched_chronic = [k for k in CHRONIC_KEYWORDS if k in diag or k in notes]
+        if matched_chronic:
+            reasons.append(f"Chronische Erkrankung erkannt: {', '.join(k.capitalize() for k in matched_chronic[:2])}")
 
-    if los >= 10:
-        reasons.append(
-            f"Length of stay {los} days — stays over 10 days indicate higher complexity"
-        )
+        if los >= 10:
+            reasons.append(f"Verweildauer {los} Tage — Aufenthalte über 10 Tage deuten auf höhere Komplexität hin")
 
-    matched_flags = [k for k in COMPLICATION_FLAGS
-                     if k in notes]
-    if matched_flags:
-        reasons.append(
-            f"Clinical notes flag: {', '.join(matched_flags[:2])}"
-        )
+        matched_flags = [k for k in COMPLICATION_FLAGS if k in notes]
+        if matched_flags:
+            reasons.append(f"Klinischer Hinweis: {', '.join(k.capitalize() for k in matched_flags[:2])}")
 
-    if not reasons:
-        reasons.append("No significant risk factors identified")
+        if not reasons:
+            reasons.append("Keine signifikanten Risikofaktoren identifiziert")
+    else:
+        if age >= 80:
+            reasons.append(f"Age {age} — patients over 80 have higher readmission rates")
+        elif age >= 65:
+            reasons.append(f"Age {age} — patients over 65 have elevated readmission risk")
+
+        matched_chronic = [k for k in CHRONIC_KEYWORDS if k in diag or k in notes]
+        if matched_chronic:
+            reasons.append(f"Chronic condition detected: {', '.join(k.capitalize() for k in matched_chronic[:2])}")
+
+        if los >= 10:
+            reasons.append(f"Length of stay {los} days — stays over 10 days indicate higher complexity")
+
+        matched_flags = [k for k in COMPLICATION_FLAGS if k in notes]
+        if matched_flags:
+            reasons.append(f"Clinical notes flag: {', '.join(k.capitalize() for k in matched_flags[:2])}")
+
+        if not reasons:
+            reasons.append("No significant risk factors identified")
 
     return reasons

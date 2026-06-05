@@ -237,7 +237,7 @@ def _make_risk_box(patient: dict, lang: str, styles: dict) -> list:
     """Build a coloured risk score callout."""
     risk, score = compute_risk(patient)
     from app.core.risk import get_risk_explanation
-    reasons = get_risk_explanation(patient)
+    reasons = get_risk_explanation(patient, lang)
 
     risk_colors = {
         "High":   (C_RED,   C_RED_BG),

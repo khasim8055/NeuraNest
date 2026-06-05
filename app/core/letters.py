@@ -302,7 +302,7 @@ def generate_al2(patient: dict, lang: str = "Deutsch") -> str:
 
     risk, score = compute_risk(patient)
     from app.core.risk import get_risk_explanation
-    risk_reasons = get_risk_explanation(patient)
+    risk_reasons = get_risk_explanation(patient, lang)
 
     if lang == "Deutsch":
         today = datetime.now().strftime("%d.%m.%Y")
