@@ -224,6 +224,90 @@ class LetterheadSection(QWidget):
         except Exception as e:
             self.msg_label.setText(f"Error: {str(e)}")
 
+
+
+class CsvImportSection(QWidget):
+    """CSV patient import section in settings panel."""
+
+    def __init__(self, on_imported=None):
+        super().__init__()
+        self.on_imported = on_imported
+        self._build()
+
+    def _build(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        layout.addWidget(_make_section("Import Patients from CSV"))
+        layout.addWidget(_make_divider())
+
+        info = QLabel(
+            "Import patients from a CSV file using the NeuraCare template.\n"
+            "Download the template, fill it in, then import."
+        )
+        info.setStyleSheet(f"color: {COLORS['text_muted']}; font-size: 11px;")
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+        btn_row = QHBoxLayout()
+
+        template_btn = _btn("Download Template", COLORS["accent_amber"])
+        template_btn.clicked.connect(self._on_download_template)
+        btn_row.addWidget(template_btn)
+
+        import_btn = _btn("Import CSV", COLORS["accent_blue"])
+        import_btn.clicked.connect(self._on_import)
+        btn_row.addWidget(import_btn)
+
+        layout.addLayout(btn_row)
+
+        self.msg_label = QLabel("")
+        self.msg_label.setStyleSheet(
+            f"color: {COLORS['accent_green']}; font-size: 11px;"
+        )
+        self.msg_label.setWordWrap(True)
+        layout.addWidget(self.msg_label)
+
+    def _on_download_template(self):
+        from app.core.csv_import import create_template
+        path = create_template()
+        self.msg_label.setStyleSheet(
+            f"color: {COLORS['accent_green']}; font-size: 11px;"
+        )
+        self.msg_label.setText(f"Template saved to Desktop:\n{path}")
+
+    def _on_import(self):
+        from PyQt6.QtWidgets import QFileDialog
+        from app.core.csv_import import import_patients_from_csv
+        from app.core.auth import Session
+
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select CSV File", "", "CSV Files (*.csv)"
+        )
+        if not path:
+            return
+
+        ok, imported, skipped, errors = import_patients_from_csv(
+            path, created_by=Session.get_username() or "import"
+        )
+
+        if ok:
+            msg = f"Imported {imported} patient(s)."
+            if skipped:
+                msg += f" Skipped {skipped} (already exist or empty name)."
+            self.msg_label.setStyleSheet(
+                f"color: {COLORS['accent_green']}; font-size: 11px;"
+            )
+            self.msg_label.setText(msg)
+            if self.on_imported:
+                self.on_imported()
+        else:
+            self.msg_label.setStyleSheet(
+                f"color: {COLORS['accent_red']}; font-size: 11px;"
+            )
+            self.msg_label.setText("\n".join(errors[:3]))
+
 class ChangePasswordSection(QWidget):
     def __init__(self):
         super().__init__()

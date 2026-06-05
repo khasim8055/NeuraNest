@@ -1,0 +1,17 @@
+14: from datetime import datetime
+45:     Safe against timing attacks — always takes same amount of time.
+59: class Session:
+62:     Reset when app closes — user must log in again each time.
+124:             Session.login(user)
+163:         # Success — update last login timestamp
+168:                 (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), user["id"])
+347:     # Test hash is different each time (bcrypt salting)
+358:     assert not Session.is_logged_in(), "Should not be logged in"
+367:     Session.login(test_user)
+368:     assert Session.is_logged_in(), "Should be logged in"
+369:     assert Session.get_username() == "testdoctor", "Wrong username"
+370:     assert not Session.is_admin(), "Doctor should not be admin"
+371:     print("   ✓ Session login works")
+373:     Session.logout()
+374:     assert not Session.is_logged_in(), "Should be logged out"
+375:     print("   ✓ Session logout works")

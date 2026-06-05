@@ -59,7 +59,7 @@ class LetterPanel(QWidget):
         self.on_close = on_close
         self._patient = None
         self._lang    = "Deutsch"
-        self._level   = 1
+        self._level   = 2
         self._letter_text = ""
         self._build_ui()
 
@@ -78,7 +78,7 @@ class LetterPanel(QWidget):
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(24, 0, 24, 0)
 
-        self.title_label = QLabel("Discharge Letter")
+        self.title_label = QLabel("Arztbrief")
         self.title_label.setStyleSheet(
             "font-size: 16px; font-weight: bold;"
         )
@@ -115,7 +115,8 @@ class LetterPanel(QWidget):
                 color: {COLORS['text_muted']};
             }}
         """)
-        self.pdf_btn.setFixedHeight(32)
+        self.pdf_btn.setFixedHeight(34)
+        
         self.pdf_btn.setEnabled(False)
         self.pdf_btn.clicked.connect(self._on_export_pdf)
 
@@ -130,34 +131,11 @@ class LetterPanel(QWidget):
             f"background-color: {COLORS['bg_panel']}; "
             f"border-bottom: 1px solid {COLORS['border']};"
         )
-        controls.setFixedHeight(60)
+        controls.setFixedHeight(56)
         ctrl_layout = QHBoxLayout(controls)
-        ctrl_layout.setContentsMargins(24, 0, 24, 0)
+        ctrl_layout.setContentsMargins(16, 0, 16, 0)
         ctrl_layout.setSpacing(16)
 
-        # AL Level selector
-        level_label = QLabel("Level: AL")
-        level_label.setStyleSheet(
-            f"color: {COLORS['text_muted']}; font-size: 11px;"
-        )
-
-        self.level_group = QButtonGroup()
-        self._level_btns = {}
-
-        level_names = {0: "0", 1: "1", 2: "2", 3: "3 (AI)"}
-        for lvl, name in level_names.items():
-            btn = QPushButton(name)
-            btn.setCheckable(True)
-            btn.setChecked(lvl == 1)
-            btn.setFixedSize(60 if lvl == 3 else 48, 30)
-            btn.setStyleSheet(self._level_btn_style(lvl == 1, is_ai=(lvl == 3)))
-            btn.clicked.connect(lambda checked, l=lvl: self._on_level_changed(l))
-            self.level_group.addButton(btn)
-            self._level_btns[lvl] = btn
-
-        ctrl_layout.addWidget(level_label)
-        for lvl in [0, 1, 2, 3]:
-            ctrl_layout.addWidget(self._level_btns[lvl])
 
         # Language toggle
         divider = QFrame()
@@ -176,7 +154,7 @@ class LetterPanel(QWidget):
         for btn, lang in [(self.lang_de_btn, "Deutsch"),
                           (self.lang_en_btn, "English")]:
             btn.setCheckable(True)
-            btn.setFixedHeight(30)
+            btn.setFixedHeight(34)
             btn.setStyleSheet(self._lang_btn_style(lang == "Deutsch"))
             btn.clicked.connect(
                 lambda checked, l=lang: self._on_lang_changed(l)
@@ -190,7 +168,7 @@ class LetterPanel(QWidget):
 
         # Generate button
         ctrl_layout.addStretch()
-        self.generate_btn = QPushButton("Generate Letter")
+        self.generate_btn = QPushButton("Arztbrief generieren")
         self.generate_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {COLORS['accent_green']};
@@ -203,13 +181,14 @@ class LetterPanel(QWidget):
             }}
             QPushButton:hover {{ background-color: #63C899; }}
         """)
-        self.generate_btn.setFixedHeight(32)
-        self.generate_btn.setFixedWidth(120)
+        self.generate_btn.setFixedHeight(34)
+        self.generate_btn.setMinimumWidth(200)
+        
         self.generate_btn.clicked.connect(self._on_generate)
         ctrl_layout.addWidget(self.generate_btn)
 
         # Copy button
-        self.copy_btn = QPushButton("Copy Text")
+        self.copy_btn = QPushButton("Kopieren")
         self.copy_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {COLORS['bg_card']};
@@ -224,8 +203,9 @@ class LetterPanel(QWidget):
                 color: {COLORS['text_muted']};
             }}
         """)
-        self.copy_btn.setFixedHeight(32)
-        self.copy_btn.setFixedWidth(90)
+        self.copy_btn.setFixedHeight(34)
+        
+        self.copy_btn.setMinimumWidth(90)
         self.copy_btn.setEnabled(False)
         self.copy_btn.clicked.connect(self._on_copy)
         ctrl_layout.addWidget(self.copy_btn)
@@ -241,7 +221,7 @@ class LetterPanel(QWidget):
         desc_layout.setContentsMargins(24, 0, 24, 0)
 
         self.desc_label = QLabel(
-            LEVEL_INFO[1]["description"]
+            "Vollständiger Arztbrief mit allen Notizen und Risikobewertung."
         )
         self.desc_label.setStyleSheet(
             f"color: {COLORS['text_muted']}; font-size: 11px;"
@@ -263,7 +243,7 @@ class LetterPanel(QWidget):
             }}
         """)
         self.preview.setPlaceholderText(
-            "Select a level and click Generate Letter to preview the discharge letter here."
+            "Klicken Sie auf Arztbrief generieren um den Brief zu erstellen."
         )
 
         outer.addWidget(header)
@@ -349,7 +329,7 @@ class LetterPanel(QWidget):
         """Load a patient and show the panel."""
         self._patient = patient
         name = patient.get("name", "Unknown")
-        self.title_label.setText(f"Discharge Letter — {name}")
+        self.title_label.setText(f"Arztbrief — {name}")
         self.preview.clear()
         self.preview.setPlaceholderText(
             f"Click Generate Letter to create a discharge letter for {name}."
@@ -384,11 +364,13 @@ class LetterPanel(QWidget):
         self.lang_en_btn.setStyleSheet(
             self._lang_btn_style(lang == "English")
         )
-        # Update description text language
-        info = LEVEL_INFO.get(self._level, {})
-        key = "description" if lang == "Deutsch" else "description_en"
-        self.desc_label.setText(info.get(key, ""))
-
+        # Update button text based on language
+        if lang == "Deutsch":
+            self.generate_btn.setText("Arztbrief generieren" if self._lang == "Deutsch" else "Generate Discharge Letter")
+            self.copy_btn.setText("Kopieren")
+        else:
+            self.generate_btn.setText("Generate Discharge Letter")
+            self.copy_btn.setText("Copy Text")
         # Regenerate if already generated
         if self._letter_text:
             self._on_generate()
@@ -407,7 +389,7 @@ class LetterPanel(QWidget):
                 "Please wait."
             )
         else:
-            self.generate_btn.setText("Generating…")
+            self.generate_btn.setText("Wird generiert…")
 
         ok, text, error = generate_letter(
             self._patient,
@@ -442,17 +424,17 @@ class LetterPanel(QWidget):
             self.copy_btn.setEnabled(False)
 
         self.generate_btn.setEnabled(True)
-        self.generate_btn.setText("Generate Letter")
+        self.generate_btn.setText("Arztbrief generieren" if self._lang == "Deutsch" else "Generate Discharge Letter")
 
     def _on_copy(self):
         """Copy current letter text to clipboard (including edits)."""
         current_text = self.preview.toPlainText()
         if current_text:
             QApplication.clipboard().setText(current_text)
-            self.copy_btn.setText("Copied!")
+            self.copy_btn.setText("Kopiert!" if self._lang == "Deutsch" else "Copied!")
             # Reset button text after delay
             from PyQt6.QtCore import QTimer
-            QTimer.singleShot(2000, lambda: self.copy_btn.setText("Copy Text"))
+            QTimer.singleShot(2000, lambda: self.copy_btn.setText("Kopieren" if self._lang == "Deutsch" else "Copy Text"))
 
     def _on_export_pdf(self):
         """Export discharge letter as PDF — uses edited version if modified."""
@@ -480,7 +462,7 @@ class LetterPanel(QWidget):
 
         from app.core.pdf_exporter import export_and_open
         self.pdf_btn.setEnabled(False)
-        self.pdf_btn.setText("Exporting…")
+        self.pdf_btn.setText("Exportiere…")
 
         ok, file_path, err = export_and_open(
             self._patient,
@@ -493,7 +475,7 @@ class LetterPanel(QWidget):
             # Notify main window
             if self.on_pdf:
                 self.on_pdf(self._patient, file_path)
-            self.pdf_btn.setText("PDF Saved ✓")
+            self.pdf_btn.setText("PDF gespeichert ✓")
             from PyQt6.QtCore import QTimer
             QTimer.singleShot(3000, lambda: self.pdf_btn.setText("Export PDF"))
         else:

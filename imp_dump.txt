@@ -1,0 +1,8 @@
+319:     def __init__(self, on_select, on_new, on_import=None):
+325:         self.on_import = on_import
+369:         import_btn = QPushButton("Import CSV")
+370:         import_btn.setFixedHeight(28)
+371:         import_btn.setStyleSheet(f"""
+385:         import_btn.clicked.connect(self.on_import)
+386:         header_layout.addWidget(import_btn)
+1000:             on_import=self._on_csv_import,
