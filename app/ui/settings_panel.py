@@ -111,6 +111,119 @@ def _btn(text: str, color: str = None, danger: bool = False) -> QPushButton:
 # CHANGE PASSWORD SECTION
 # ================================================================
 
+
+
+class LetterheadSection(QWidget):
+    """Clinic letterhead settings — shown in settings panel."""
+
+    def __init__(self):
+        super().__init__()
+        self.setStyleSheet(FIELD_STYLE)
+        self._build()
+
+    def _build(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        layout.addWidget(_make_section("Clinic Letterhead"))
+        layout.addWidget(_make_divider())
+
+        info = QLabel(
+            "These details appear on every generated PDF letterhead."
+        )
+        info.setStyleSheet(
+            f"color: {COLORS['text_muted']}; font-size: 11px;"
+        )
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+        fields = [
+            ("clinic_name",   "Practice / Clinic Name *",  "e.g. Praxis Dr. Mueller"),
+            ("clinic_doctor", "Lead Physician",             "e.g. Dr. Anna Mueller"),
+            ("clinic_street", "Street Address",             "e.g. Hauptstraße 12"),
+            ("clinic_city",   "Postcode and City",          "e.g. 69115 Heidelberg"),
+            ("clinic_phone",  "Phone Number",               "e.g. +49 6221 123456"),
+            ("clinic_email",  "Email Address",              "e.g. praxis@mueller.de"),
+            ("clinic_bsnr",   "BSNR (Betriebsstättennr.)", "9-digit practice number"),
+            ("clinic_lanr",   "LANR (Arztnummer)",          "9-digit doctor number"),
+        ]
+
+        self._inputs = {}
+        for key, label, placeholder in fields:
+            layout.addWidget(_make_label(label))
+            inp = QLineEdit()
+            inp.setPlaceholderText(placeholder)
+            inp.setFixedHeight(36)
+            self._inputs[key] = inp
+            layout.addWidget(inp)
+
+        self.msg_label = QLabel("")
+        self.msg_label.setStyleSheet(
+            f"color: {COLORS['accent_red']}; font-size: 11px;"
+        )
+        layout.addWidget(self.msg_label)
+
+        save_btn = _btn("Save Letterhead", COLORS["accent_green"])
+        save_btn.clicked.connect(self._on_save)
+        layout.addWidget(save_btn)
+
+        self._load_current()
+
+    def _load_current(self):
+        """Load existing values from database."""
+        try:
+            import sqlite3, os
+            from pathlib import Path
+            base = Path(os.environ.get("NEURACARE_BASE_DIR", ""))
+            if not base or not base.exists():
+                base = Path(__file__).parent.parent.parent
+            db = base / "app" / "data" / "neuranest.db"
+            if not db.exists():
+                return
+            conn = sqlite3.connect(str(db))
+            rows = conn.execute(
+                "SELECT key, value FROM app_config WHERE key LIKE 'clinic_%'"
+            ).fetchall()
+            conn.close()
+            for key, val in rows:
+                if key in self._inputs and val:
+                    self._inputs[key].setText(val)
+        except Exception:
+            pass
+
+    def _on_save(self):
+        """Save letterhead settings to database."""
+        self.msg_label.setStyleSheet(
+            f"color: {COLORS['accent_red']}; font-size: 11px;"
+        )
+
+        if not self._inputs["clinic_name"].text().strip():
+            self.msg_label.setText("Practice name is required.")
+            return
+
+        try:
+            import sqlite3, os
+            from pathlib import Path
+            base = Path(os.environ.get("NEURACARE_BASE_DIR", ""))
+            if not base or not base.exists():
+                base = Path(__file__).parent.parent.parent
+            db = base / "app" / "data" / "neuranest.db"
+            conn = sqlite3.connect(str(db))
+            for key, inp in self._inputs.items():
+                conn.execute(
+                    "UPDATE app_config SET value=? WHERE key=?",
+                    (inp.text().strip(), key)
+                )
+            conn.commit()
+            conn.close()
+            self.msg_label.setStyleSheet(
+                f"color: {COLORS['accent_green']}; font-size: 11px;"
+            )
+            self.msg_label.setText("Letterhead saved. Next PDF will use these details.")
+        except Exception as e:
+            self.msg_label.setText(f"Error: {str(e)}")
+
 class ChangePasswordSection(QWidget):
     def __init__(self):
         super().__init__()
@@ -511,6 +624,10 @@ class SettingsPanel(QWidget):
         name = user.get("full_name", "")
         role = user.get("role", "")
         self.user_label.setText(f"Logged in as: {name} ({role})")
+
+        # Letterhead settings — available to all users
+        self.body_layout.addWidget(LetterheadSection())
+        self.body_layout.addSpacing(8)
 
         # Change password — available to all users
         self.body_layout.addWidget(ChangePasswordSection())

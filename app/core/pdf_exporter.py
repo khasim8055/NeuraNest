@@ -58,6 +58,41 @@ C_RED_BG     = rl_colors.HexColor("#F8D7DA")
 # STYLE DEFINITIONS
 # ================================================================
 
+
+
+def get_clinic_settings() -> dict:
+    """Read clinic letterhead from app_config."""
+    defaults = {
+        "clinic_name": "NeuraCare Klinik",
+        "clinic_doctor": "",
+        "clinic_street": "",
+        "clinic_city": "",
+        "clinic_phone": "",
+        "clinic_email": "",
+        "clinic_bsnr": "",
+        "clinic_lanr": "",
+    }
+    try:
+        import sqlite3, os
+        from pathlib import Path as _Path
+        base = _Path(os.environ.get("NEURACARE_BASE_DIR", ""))
+        if not base or not base.exists():
+            base = _Path(__file__).parent.parent.parent
+        db = base / "app" / "data" / "neuranest.db"
+        if not db.exists():
+            return defaults
+        conn = sqlite3.connect(str(db))
+        rows = conn.execute(
+            "SELECT key,value FROM app_config WHERE key LIKE 'clinic_%'"
+        ).fetchall()
+        conn.close()
+        for key, val in rows:
+            if key in defaults and val:
+                defaults[key] = val
+    except Exception:
+        pass
+    return defaults
+
 def _make_styles() -> dict:
     """Build all paragraph styles used in the PDF."""
     return {
@@ -343,7 +378,27 @@ def generate_pdf(
         story  = []
 
         # ── Header ───────────────────────────────────────────────
+        # Load clinic settings from database
+        cs = get_clinic_settings()
+        if clinic_name == "NeuraCare Klinik":
+            clinic_name = cs["clinic_name"]
+
         story.append(Paragraph(clinic_name, styles["clinic_name"]))
+
+        # Build address line from settings
+        addr_parts = []
+        if cs.get("clinic_doctor"): addr_parts.append(cs["clinic_doctor"])
+        if cs.get("clinic_street"): addr_parts.append(cs["clinic_street"])
+        if cs.get("clinic_city"):   addr_parts.append(cs["clinic_city"])
+        if addr_parts:
+            story.append(Paragraph("  ·  ".join(addr_parts), styles["clinic_sub"]))
+
+        contact_parts = []
+        if cs.get("clinic_phone"): contact_parts.append("Tel: " + cs["clinic_phone"])
+        if cs.get("clinic_email"): contact_parts.append(cs["clinic_email"])
+        if cs.get("clinic_bsnr"):  contact_parts.append("BSNR: " + cs["clinic_bsnr"])
+        if contact_parts:
+            story.append(Paragraph("  ·  ".join(contact_parts), styles["clinic_sub"]))
 
         if lang == "Deutsch":
             sub = "Vertraulich · Arztbrief · Datenschutzkonform"
