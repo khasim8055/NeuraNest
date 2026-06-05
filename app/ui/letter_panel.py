@@ -250,7 +250,7 @@ class LetterPanel(QWidget):
 
         # ── Letter preview area ───────────────────────────────────
         self.preview = QTextEdit()
-        self.preview.setReadOnly(True)
+        self.preview.setReadOnly(False)
         self.preview.setStyleSheet(f"""
             QTextEdit {{
                 background-color: {COLORS['bg_dark']};
@@ -269,7 +269,18 @@ class LetterPanel(QWidget):
         outer.addWidget(header)
         outer.addWidget(controls)
         outer.addWidget(self.desc_bar)
+        # Edit status bar
+        self.edit_bar = QLabel("  ✏  You can edit the letter directly above before exporting.")
+        self.edit_bar.setStyleSheet(
+            f"background-color: {COLORS['bg_panel']}; "
+            f"color: {COLORS['text_muted']}; "
+            f"font-size: 11px; padding: 6px 16px; "
+            f"border-top: 1px solid {COLORS['border']};"
+        )
+        self.edit_bar.hide()
+
         outer.addWidget(self.preview, stretch=1)
+        outer.addWidget(self.edit_bar)
 
     # ================================================================
     # STYLE HELPERS
@@ -346,6 +357,8 @@ class LetterPanel(QWidget):
         self._letter_text = ""
         self.pdf_btn.setEnabled(False)
         self.copy_btn.setEnabled(False)
+        if hasattr(self, 'edit_bar'):
+            self.edit_bar.hide()
 
     # ================================================================
     # PRIVATE METHODS
@@ -412,6 +425,7 @@ class LetterPanel(QWidget):
 
             self.pdf_btn.setEnabled(True)
             self.copy_btn.setEnabled(True)
+            self.edit_bar.show()
 
             # Log the action
             user = Session.get_user() or {}
@@ -431,18 +445,38 @@ class LetterPanel(QWidget):
         self.generate_btn.setText("Generate Letter")
 
     def _on_copy(self):
-        """Copy letter text to clipboard."""
-        if self._letter_text:
-            QApplication.clipboard().setText(self._letter_text)
+        """Copy current letter text to clipboard (including edits)."""
+        current_text = self.preview.toPlainText()
+        if current_text:
+            QApplication.clipboard().setText(current_text)
             self.copy_btn.setText("Copied!")
             # Reset button text after delay
             from PyQt6.QtCore import QTimer
             QTimer.singleShot(2000, lambda: self.copy_btn.setText("Copy Text"))
 
     def _on_export_pdf(self):
-        """Export discharge letter as PDF and open it."""
-        if not self._patient or not self._letter_text:
+        """Export discharge letter as PDF — uses edited version if modified."""
+        if not self._patient:
             return
+
+        # Always use current text from preview (may be edited by doctor)
+        current_text = self.preview.toPlainText().strip()
+        if not current_text:
+            return
+
+        # Check if doctor edited the letter
+        was_edited = current_text != self._letter_text.strip()
+        if was_edited:
+            # Log that letter was edited before export
+            from app.core.audit import log
+            from app.core.auth  import Session
+            log(
+                "pdf_export",
+                Session.get_username(),
+                patient_id=self._patient.get("id"),
+                patient_name=self._patient.get("name", ""),
+                detail=f"AL{self._level} — edited before export",
+            )
 
         from app.core.pdf_exporter import export_and_open
         self.pdf_btn.setEnabled(False)
@@ -450,7 +484,7 @@ class LetterPanel(QWidget):
 
         ok, file_path, err = export_and_open(
             self._patient,
-            self._letter_text,
+            current_text,
             lang=self._lang,
             level=self._level,
         )
